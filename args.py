@@ -1,6 +1,7 @@
 import argparse
 import torch
 
+
 def get_citation_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--no-cuda', action='store_true', default=False,
