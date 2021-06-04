@@ -1,19 +1,13 @@
 import argparse
-import os
-import random
-import numpy as np
-import pickle as pkl
-import networkx as nx
-import scipy.sparse as sp
-from utils import loadWord2Vec, clean_str
-from math import log
-from sklearn import svm
-from nltk.corpus import wordnet as wn
-from sklearn.feature_extraction.text import TfidfVectorizer
-from scipy.spatial.distance import cosine
-from tqdm import tqdm
-from collections import Counter
 import itertools
+import pickle as pkl
+import random
+from collections import Counter
+from math import log
+
+import numpy as np
+import scipy.sparse as sp
+from tqdm import tqdm
 
 parser = argparse.ArgumentParser(description='Build Document Graph')
 parser.add_argument('--dataset', type=str, default='20ng',
@@ -27,7 +21,7 @@ args = parser.parse_args()
 dataset = args.dataset
 
 word_embeddings_dim = args.embedding_dim
-word_vector_map = {} # TODO: modify this to use embedding
+word_vector_map = {}  # TODO: modify this to use embedding
 
 doc_name_list = []
 train_val_ids = []
@@ -47,7 +41,7 @@ with open('data/' + dataset + '.txt', 'r') as f:
             train_val_ids.append(id)
         label_names.add(data_label)
     label_names = list(label_names)
-    label_names_to_index = {name:i for i, name in enumerate(label_names)}
+    label_names_to_index = {name: i for i, name in enumerate(label_names)}
     for id, line in enumerate(lines):
         _, data_name, data_label_name = line.strip().split("\t")
         if data_name.find('test') != -1:
@@ -57,7 +51,6 @@ with open('data/' + dataset + '.txt', 'r') as f:
 
 with open('data/corpus/' + dataset + '_labels.txt', 'w') as f:
     f.write('\n'.join(label_names))
-
 
 print("Loaded labels and indices")
 # Get document content, after removed words
@@ -77,9 +70,8 @@ for doc_words in progress_bar:
 
 vocab, _ = zip(*word_freq.most_common())
 # put words after documents
-word_id_map = dict(zip(vocab, np.array(range(len(vocab)))+len(train_val_ids+test_ids)))
+word_id_map = dict(zip(vocab, np.array(range(len(vocab))) + len(train_val_ids + test_ids)))
 vocab_size = len(vocab)
-
 
 with open('data/corpus/' + dataset + '_vocab.txt', 'w') as f:
     vocab_str = '\n'.join(vocab)
@@ -102,6 +94,7 @@ train_size = train_val_size - val_size
 train_ids, val_ids = train_val_ids[:train_size], train_val_ids[train_size:]
 train_labels, val_labels = train_val_labels[:train_size], train_val_labels[train_size:]
 
+
 # Construct feature vectors
 def average_word_vec(doc_id, doc_content_list, word_to_vector):
     doc_vec = np.array([0.0 for k in range(word_embeddings_dim)])
@@ -113,6 +106,7 @@ def average_word_vec(doc_id, doc_content_list, word_to_vector):
             doc_vec = doc_vec + np.array(word_vector)
     doc_vec /= len(words)
     return doc_vec
+
 
 def construct_feature_label_matrix(doc_ids, doc_content_list, word_vector_map):
     row_x = []
@@ -135,12 +129,14 @@ def construct_feature_label_matrix(doc_ids, doc_content_list, word_vector_map):
     y = np.array(y)
     return x, y
 
+
 # not used
 # train_x, train_y = construct_feature_label_matrix(train_ids, doc_content_list, word_vector_map)
 # val_x, val_y = construct_feature_label_matrix(val_ids, doc_content_list, word_vector_map)
 # test_x, test_y = construct_feature_label_matrix(test_ids, doc_content_list, word_vector_map)
 
 print("Finish building feature vectors")
+
 
 # Creating word and word edges
 def create_window(seq, n=2):
@@ -153,6 +149,7 @@ def create_window(seq, n=2):
     for elem in it:
         result = result[1:] + (elem,)
         yield result
+
 
 # word co-occurence with context windows
 def construct_context_windows(ids, doc_words_list, window_size=20):
@@ -167,6 +164,7 @@ def construct_context_windows(ids, doc_words_list, window_size=20):
             windows += list(create_window(words, window_size))
     return windows
 
+
 def count_word_window_freq(windows):
     word_window_freq = Counter()
     progress_bar = tqdm(windows)
@@ -174,6 +172,7 @@ def count_word_window_freq(windows):
     for window in progress_bar:
         word_window_freq.update(set(window))
     return word_window_freq
+
 
 def count_word_pair_count(windows):
     word_pair_count = Counter()
@@ -183,7 +182,8 @@ def count_word_pair_count(windows):
         word_pairs = list(itertools.permutations(window, 2))
         word_pair_count.update(word_pairs)
     return word_pair_count
-  
+
+
 def build_word_word_graph(num_window, word_id_map, word_window_freq, word_pair_count):
     row = []
     col = []
@@ -194,7 +194,7 @@ def build_word_word_graph(num_window, word_id_map, word_window_freq, word_pair_c
         word_freq_i = word_window_freq[i]
         word_freq_j = word_window_freq[j]
         pmi = log((1.0 * count / num_window) /
-                  (1.0 * word_freq_i * word_freq_j/(num_window * num_window)))
+                  (1.0 * word_freq_i * word_freq_j / (num_window * num_window)))
         if pmi <= 0:
             continue
         row.append(word_id_map[i])
@@ -202,15 +202,17 @@ def build_word_word_graph(num_window, word_id_map, word_window_freq, word_pair_c
         weight.append(pmi)
     return row, col, weight
 
+
 def calc_word_doc_freq(ids, doc_content_list):
     # Count number of documents that contain a word
-    word_doc_list = {} # mapping from word to document id
+    word_doc_list = {}  # mapping from word to document id
     word_doc_freq = Counter()
     for doc_id in ids:
         doc_words = doc_content_list[doc_id]
         words = set(doc_words.split())
         word_doc_freq.update(words)
     return word_doc_freq
+
 
 def calc_doc_word_freq(ids, doc_content_list):
     doc_word_freq = Counter()
@@ -221,6 +223,7 @@ def calc_doc_word_freq(ids, doc_content_list):
         doc_word_pairs = zip([doc_id for _ in word_ids], word_ids)
         doc_word_freq.update(doc_word_pairs)
     return doc_word_freq
+
 
 def build_doc_word_graph(ids, doc_words_list, doc_word_freq, word_doc_freq, phase='B'):
     row = []
@@ -236,7 +239,7 @@ def build_doc_word_graph(ids, doc_words_list, doc_word_freq, word_doc_freq, phas
             freq = doc_word_freq[key]
             idf = log(1.0 * len(ids) /
                       word_doc_freq[word])
-            w = freq*idf
+            w = freq * idf
             if phase == "B":
                 row.append(doc_id)
                 col.append(word_id)
@@ -245,8 +248,10 @@ def build_doc_word_graph(ids, doc_words_list, doc_word_freq, word_doc_freq, phas
                 row.append(word_id)
                 col.append(doc_id)
                 weight.append(w)
-            else: raise ValueError("wrong phase")
+            else:
+                raise ValueError("wrong phase")
     return row, col, weight
+
 
 def concat_graph(*args):
     rows, cols, weights = zip(*args)
@@ -255,16 +260,20 @@ def concat_graph(*args):
     weight = list(itertools.chain(*weights))
     return row, col, weight
 
+
 def export_graph(graph, node_size, phase=""):
     row, col, weight = graph
     adj = sp.csr_matrix(
         (weight, (row, col)), shape=(node_size, node_size))
-    if phase == "": path = "data/ind.{}.adj".format(dataset)
-    else: path = "data/ind.{}.{}.adj".format(dataset, phase)
+    if phase == "":
+        path = "data/ind.{}.adj".format(dataset)
+    else:
+        path = "data/ind.{}.{}.adj".format(dataset, phase)
     with open(path, 'wb') as f:
         pkl.dump(adj, f)
 
-ids = train_val_ids+test_ids
+
+ids = train_val_ids + test_ids
 windows = construct_context_windows(ids, doc_content_list)
 word_window_freq = count_word_window_freq(windows)
 word_pair_count = count_word_pair_count(windows)
@@ -275,7 +284,7 @@ word_doc_freq = calc_word_doc_freq(ids, doc_content_list)
 B = build_doc_word_graph(ids, doc_content_list, doc_word_freq, word_doc_freq, phase="B")
 C = build_doc_word_graph(ids, doc_content_list, doc_word_freq, word_doc_freq, phase="C")
 
-node_size = len(vocab)+len(train_val_ids)+len(test_ids)
+node_size = len(vocab) + len(train_val_ids) + len(test_ids)
 export_graph(concat_graph(B, C, D), node_size, phase="BCD")
 export_graph(concat_graph(B, C), node_size, phase="BC")
 export_graph(concat_graph(B, D), node_size, phase="BD")

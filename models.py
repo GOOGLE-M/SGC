@@ -4,11 +4,13 @@ from torch.nn import Module
 import torch.nn.functional as F
 import math
 
+
 class SGC(nn.Module):
     """
     A Simple PyTorch Implementation of Logistic Regression.
     Assuming the features have been preprocessed with k-step graph propagation.
     """
+
     def __init__(self, nfeat, nclass):
         super(SGC, self).__init__()
 
@@ -16,6 +18,7 @@ class SGC(nn.Module):
 
     def forward(self, x):
         return self.W(x)
+
 
 class GraphConvolution(Module):
     """
@@ -37,10 +40,12 @@ class GraphConvolution(Module):
         support = self.W(input)
         output = torch.spmm(adj, support)
 
+
 class GCN(nn.Module):
     """
     A Two-layer GCN.
     """
+
     def __init__(self, nfeat, nhid, nclass, dropout):
         super(GCN, self).__init__()
 
@@ -55,6 +60,7 @@ class GCN(nn.Module):
         x = F.dropout(x, self.dropout, training=self.training)
         x = self.gc2(x, adj)
         return x
+
 
 def get_model(model_opt, nfeat, nclass, nhid=0, dropout=0, cuda=True):
     if model_opt == "GCN":

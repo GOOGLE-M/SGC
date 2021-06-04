@@ -7,6 +7,7 @@ import networkx as nx
 from normalization import fetch_normalization, row_normalize
 from time import perf_counter
 
+
 def parse_index_file(filename):
     """Parse index file."""
     index = []
@@ -14,11 +15,13 @@ def parse_index_file(filename):
         index.append(int(line.strip()))
     return index
 
+
 def preprocess_citation(adj, features, normalization="FirstOrderGCN"):
     adj_normalizer = fetch_normalization(normalization)
     adj = adj_normalizer(adj)
     features = row_normalize(features)
     return adj, features
+
 
 def sparse_mx_to_torch_sparse_tensor(sparse_mx):
     """Convert a scipy sparse matrix to a torch sparse tensor."""
@@ -29,14 +32,15 @@ def sparse_mx_to_torch_sparse_tensor(sparse_mx):
     shape = torch.Size(sparse_mx.shape)
     return torch.sparse.FloatTensor(indices, values, shape)
 
+
 def load_citation(dataset_str="cora", normalization="AugNormAdj", cuda=True):
     """
     Load Citation Networks Datasets.
     """
     names = ['x', 'y', 'tx', 'ty', 'allx', 'ally', 'graph']
     objects = []
-    for i in range(len(names)):
-        with open("data/ind.{}.{}".format(dataset_str.lower(), names[i]), 'rb') as f:
+    for name in names:
+        with open("data/ind.{}.{}".format(dataset_str.lower(), name), 'rb') as f:
             if sys.version_info > (3, 0):
                 objects.append(pkl.load(f, encoding='latin1'))
             else:
@@ -49,12 +53,12 @@ def load_citation(dataset_str="cora", normalization="AugNormAdj", cuda=True):
     if dataset_str == 'citeseer':
         # Fix citeseer dataset (there are some isolated nodes in the graph)
         # Find isolated nodes, add them as zero-vecs into the right position
-        test_idx_range_full = range(min(test_idx_reorder), max(test_idx_reorder)+1)
+        test_idx_range_full = range(min(test_idx_reorder), max(test_idx_reorder) + 1)
         tx_extended = sp.lil_matrix((len(test_idx_range_full), x.shape[1]))
-        tx_extended[test_idx_range-min(test_idx_range), :] = tx
+        tx_extended[test_idx_range - min(test_idx_range), :] = tx
         tx = tx_extended
         ty_extended = np.zeros((len(test_idx_range_full), y.shape[1]))
-        ty_extended[test_idx_range-min(test_idx_range), :] = ty
+        ty_extended[test_idx_range - min(test_idx_range), :] = ty
         ty = ty_extended
 
     features = sp.vstack((allx, tx)).tolil()
@@ -66,7 +70,7 @@ def load_citation(dataset_str="cora", normalization="AugNormAdj", cuda=True):
 
     idx_test = test_idx_range.tolist()
     idx_train = range(len(y))
-    idx_val = range(len(y), len(y)+500)
+    idx_val = range(len(y), len(y) + 500)
 
     adj, features = preprocess_citation(adj, features, normalization)
 
@@ -89,34 +93,39 @@ def load_citation(dataset_str="cora", normalization="AugNormAdj", cuda=True):
 
     return adj, features, labels, idx_train, idx_val, idx_test
 
+
 def sgc_precompute(features, adj, degree):
     t = perf_counter()
-    for i in range(degree):
+    for _ in range(degree):
         features = torch.spmm(adj, features)
-    precompute_time = perf_counter()-t
+    precompute_time = perf_counter() - t
     return features, precompute_time
+
 
 def set_seed(seed, cuda):
     np.random.seed(seed)
     torch.manual_seed(seed)
     if cuda: torch.cuda.manual_seed(seed)
 
-def loadRedditFromNPZ(dataset_dir):
-    adj = sp.load_npz(dataset_dir+"reddit_adj.npz")
-    data = np.load(dataset_dir+"reddit.npz")
 
-    return adj, data['feats'], data['y_train'], data['y_val'], data['y_test'], data['train_index'], data['val_index'], data['test_index']
+def loadRedditFromNPZ(dataset_dir):
+    adj = sp.load_npz(dataset_dir + "reddit_adj.npz")
+    data = np.load(dataset_dir + "reddit.npz")
+
+    return adj, data['feats'], data['y_train'], data['y_val'], data['y_test'], data['train_index'], data['val_index'], \
+           data['test_index']
+
 
 def load_reddit_data(data_path="data/", normalization="AugNormAdj", cuda=True):
     adj, features, y_train, y_val, y_test, train_index, val_index, test_index = loadRedditFromNPZ("data/")
     labels = np.zeros(adj.shape[0])
-    labels[train_index]  = y_train
-    labels[val_index]  = y_val
-    labels[test_index]  = y_test
+    labels[train_index] = y_train
+    labels[val_index] = y_val
+    labels[test_index] = y_test
     adj = adj + adj.T
     train_adj = adj[train_index, :][:, train_index]
     features = torch.FloatTensor(np.array(features))
-    features = (features-features.mean(dim=0))/features.std(dim=0)
+    features = (features - features.mean(dim=0)) / features.std(dim=0)
     adj_normalizer = fetch_normalization(normalization)
     adj = adj_normalizer(adj)
     adj = sparse_mx_to_torch_sparse_tensor(adj).float()
